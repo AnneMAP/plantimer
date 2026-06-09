@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "DSP Core Surface",
+    "slug": "dsp-core-surface",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "nl.mapmedia.dspcoresurface",
+      "permissions": ["INTERNET", "VIBRATE"]
+    },
+    "plugins": [
+      "expo-router",
+      "react-native-reanimated"
+    ]
+  }
+}

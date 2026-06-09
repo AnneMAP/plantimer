@@ -1,0 +1,5 @@
+node_modules/
+build_portable/node/
+*.zip
+.expo/
+dist/
