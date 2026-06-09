@@ -2,6 +2,7 @@
   "expo": {
     "name": "DSP Core Surface",
     "slug": "dsp-core-surface",
+    "owner": "annemap",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
@@ -20,7 +21,6 @@
       "permissions": ["INTERNET", "VIBRATE"]
     },
     "plugins": [
-      "expo-router",
       "react-native-reanimated"
     ]
   }

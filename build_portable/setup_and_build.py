@@ -313,6 +313,12 @@ def main():
     info("Je krijgt een downloadlink als het klaar is.")
     print()
 
+    # Assets aanmaken indien nodig
+    make_assets = SCRIPT_DIR / "make_assets.py"
+    if make_assets.exists():
+        subprocess.run([sys.executable, str(make_assets)], capture_output=True)
+        ok("Assets gecontroleerd.")
+
     # Git safe.directory instellen (vereist op gedeelde/netwerk schijven)
     subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(APP_DIR)], capture_output=True)
 
@@ -331,10 +337,6 @@ def main():
     subprocess.run(["git", "add", "."], cwd=str(APP_DIR), capture_output=True)
     subprocess.run(["git", "commit", "-m", "build"], cwd=str(APP_DIR), capture_output=True)
     ok("Git repo gereed.")
-
-    # Koppel project aan Expo (eenmalig, fout negeren als al gedaan)
-    info("Expo project koppelen (eenmalig)...")
-    npx_run(paths, ["eas-cli", "build:configure", "--platform", "android", "--non-interactive"], cwd=APP_DIR)
 
     rc = npx_run(paths, [
         "eas-cli", "build",
