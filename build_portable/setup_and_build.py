@@ -313,8 +313,28 @@ def main():
     info("Je krijgt een downloadlink als het klaar is.")
     print()
 
-    # Koppel project (eenmalig, fout negeren als al gedaan)
-    npx_run(paths, ["eas-cli", "build:configure", "--platform", "android"], cwd=APP_DIR)
+    # Git safe.directory instellen (vereist op gedeelde/netwerk schijven)
+    subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(APP_DIR)], capture_output=True)
+
+    # Zorg dat git repo + commit aanwezig is (EAS vereist dit)
+    git_dir = APP_DIR / ".git"
+    if not git_dir.exists():
+        info("Git repo initialiseren (vereist voor EAS)...")
+        subprocess.run(["git", "init"], cwd=str(APP_DIR), capture_output=True)
+        subprocess.run(["git", "config", "user.email", "build@local"], cwd=str(APP_DIR), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Build"], cwd=str(APP_DIR), capture_output=True)
+
+    # Commit eventuele wijzigingen
+    gi = APP_DIR / ".gitignore"
+    if not gi.exists():
+        gi.write_text("node_modules/\nbuild_portable/node/\n*.zip\n.expo/\ndist/\n")
+    subprocess.run(["git", "add", "."], cwd=str(APP_DIR), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "build"], cwd=str(APP_DIR), capture_output=True)
+    ok("Git repo gereed.")
+
+    # Koppel project aan Expo (eenmalig, fout negeren als al gedaan)
+    info("Expo project koppelen (eenmalig)...")
+    npx_run(paths, ["eas-cli", "build:configure", "--platform", "android", "--non-interactive"], cwd=APP_DIR)
 
     rc = npx_run(paths, [
         "eas-cli", "build",
