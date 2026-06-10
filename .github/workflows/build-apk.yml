@@ -30,8 +30,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
           cache: 'npm'
+
+      - name: Clear npm cache
+        run: npm cache clean --force
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -52,14 +55,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Configure npm and install dependencies
+      - name: Clean install dependencies
         run: |
-          # Create .npmrc for legacy peer deps compatibility
-          echo "legacy-peer-deps=true" > .npmrc
-          echo "node-linker=hoisted" >> .npmrc
+          # Remove old node_modules and lock file
+          rm -rf node_modules package-lock.json
           
-          # Clean install with npm (not ci) to ensure compatibility
-          npm install --legacy-peer-deps
+          # Create .npmrc for compatibility
+          echo "legacy-peer-deps=true" > .npmrc
+          
+          # Fresh install with Expo SDK 51
+          npm install
+          
+          # Verify expo version
+          npx expo --version
 
       - name: Create placeholder assets
         run: |
