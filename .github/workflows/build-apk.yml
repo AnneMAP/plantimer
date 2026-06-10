@@ -52,8 +52,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Configure npm and install dependencies
+        run: |
+          # Create .npmrc for legacy peer deps compatibility
+          echo "legacy-peer-deps=true" > .npmrc
+          echo "node-linker=hoisted" >> .npmrc
+          
+          # Clean install with npm (not ci) to ensure compatibility
+          npm install --legacy-peer-deps
 
       - name: Create placeholder assets
         run: |
@@ -88,52 +94,169 @@ jobs:
           EOF
 
       - name: Generate Android project with Expo prebuild
-        run: npx expo prebuild --platform android --clean
+        run: |
+          # Remove the modules directory temporarily to avoid TypeScript issues during prebuild
+          mv modules modules_backup 2>/dev/null || true
+          
+          # Run prebuild
+          npx expo prebuild --platform android --clean --no-install || npx expo prebuild --platform android --clean
+          
+          # Restore modules
+          mv modules_backup modules 2>/dev/null || true
 
-      - name: Copy native module to Android project
+      - name: Setup native Android module
         run: |
           echo "Setting up native PlanTimer module..."
           
-          # Find the package name from the android directory
-          PACKAGE_DIR=$(find android/app/src/main/java -type d -name "plantimer" 2>/dev/null | head -1 || echo "")
-          if [ -z "$PACKAGE_DIR" ]; then
-            # Create package structure
+          # Find the package directory structure
+          PKG_DIR=$(find android/app/src/main/java -type d -name "plantimer" 2>/dev/null | head -1)
+          
+          if [ -z "$PKG_DIR" ]; then
+            echo "Creating package structure..."
             mkdir -p android/app/src/main/java/com/plantimer/app/modules
-            TARGET_DIR="android/app/src/main/java/com/plantimer/app/modules"
-          else
-            TARGET_DIR="$PACKAGE_DIR/modules"
-            mkdir -p "$TARGET_DIR"
+            PKG_DIR="android/app/src/main/java/com/plantimer/app"
           fi
           
-          # Copy the Kotlin module file
-          cp modules/plantimer/android/src/main/java/com/plantimer/app/modules/PlanTimerModule.kt \
-             "$TARGET_DIR/"
+          MODULES_DIR="$PKG_DIR/modules"
+          mkdir -p "$MODULES_DIR"
           
-          echo "Native module copied to: $TARGET_DIR"
-          ls -la "$TARGET_DIR"
+          # Create the native module Kotlin file
+          cat > "$MODULES_DIR/PlanTimerModule.kt" << 'KOTLINEOF'
+          package com.plantimer.app.modules
           
-          # Get the actual package path
-          PKG_PATH=$(find android/app/src/main/java -name "MainApplication.kt" -exec dirname {} \; | head -1)
-          PKG_NAME=$(echo "$PKG_PATH" | sed 's|android/app/src/main/java/||' | tr '/' '.')
-          echo "Package name: $PKG_NAME"
-          
-          # Create a PackageList.java in the correct location if it doesn't exist
-          if [ ! -f "$PKG_PATH/PlanTimerPackage.kt" ]; then
-            cat > "$PKG_PATH/PlanTimerPackage.kt" << 'PKGEOF'
-          package com.plantimer.app
-          
+          import android.app.Activity
+          import android.app.KeyguardManager
           import android.content.Context
-          import com.plantimer.app.modules.PlanTimerModule
-          import expo.modules.core.interfaces.Package
-          import expo.modules.core.interfaces.ReactActivityLifecycleListener
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Build
+          import android.os.PowerManager
+          import android.provider.Settings
+          import android.view.WindowManager
+          import expo.modules.kotlin.modules.Module
+          import expo.modules.kotlin.modules.ModuleDefinition
+          import expo.modules.kotlin.Promise
           
-          class PlanTimerPackage : Package {
-              override fun createNativeModules(reactContext: Context): List<NativeModule> {
-                  return listOf(PlanTimerModule())
+          class PlanTimerModule : Module() {
+              override fun definition() = ModuleDefinition {
+                  Name("PlanTimer")
+                  
+                  Function("wakeupAndUnlock") { promise: Promise ->
+                      try {
+                          wakeupAndUnlock()
+                          promise.resolve(true)
+                      } catch (e: Exception) {
+                          promise.reject("WAKEUP_ERROR", e.message, e)
+                      }
+                  }
+                  
+                  Function("openApp") { packageName: String, promise: Promise ->
+                      try {
+                          val result = openApp(packageName)
+                          promise.resolve(result)
+                      } catch (e: Exception) {
+                          promise.reject("OPEN_APP_ERROR", e.message, e)
+                      }
+                  }
+                  
+                  Function("isDeviceLocked") { promise: Promise ->
+                      try {
+                          val locked = isDeviceLocked()
+                          promise.resolve(locked)
+                      } catch (e: Exception) {
+                          promise.reject("LOCK_CHECK_ERROR", e.message, e)
+                      }
+                  }
+                  
+                  Function("isBatteryOptimizationEnabled") { promise: Promise ->
+                      try {
+                          val enabled = isBatteryOptimizationEnabled()
+                          promise.resolve(enabled)
+                      } catch (e: Exception) {
+                          promise.reject("BATTERY_OPT_ERROR", e.message, e)
+                      }
+                  }
+              }
+              
+              private var wakeLock: PowerManager.WakeLock? = null
+              
+              private val context: Context
+                  get() = appContext.reactContext ?: throw Exception("React context not available")
+              
+              private val currentActivity: Activity?
+                  get() = appContext.currentActivity
+              
+              private fun wakeupAndUnlock() {
+                  val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                  val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                  
+                  wakeLock = powerManager.newWakeLock(
+                      PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                      "PlanTimer::WakeLock"
+                  )
+                  wakeLock?.acquire(30000)
+                  
+                  currentActivity?.runOnUiThread {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          currentActivity?.setShowWhenLocked(true)
+                          currentActivity?.setTurnScreenOn(true)
+                      } else {
+                          @Suppress("DEPRECATION")
+                          currentActivity?.window?.addFlags(
+                              WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                              WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                          )
+                      }
+                      
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          keyguardManager.requestDismissKeyguard(currentActivity, null)
+                      }
+                  }
+              }
+              
+              private fun openApp(packageName: String): Boolean {
+                  return try {
+                      val pm = context.packageManager
+                      val intent = pm.getLaunchIntentForPackage(packageName)
+                      
+                      if (intent != null) {
+                          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                          context.startActivity(intent)
+                          true
+                      } else {
+                          val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
+                          marketIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                          
+                          if (marketIntent.resolveActivity(pm) != null) {
+                              context.startActivity(marketIntent)
+                              true
+                          } else {
+                              false
+                          }
+                      }
+                  } catch (e: Exception) {
+                      false
+                  }
+              }
+              
+              private fun isDeviceLocked(): Boolean {
+                  val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                  return keyguardManager.isKeyguardLocked
+              }
+              
+              private fun isBatteryOptimizationEnabled(): Boolean {
+                  return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                      !powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                  } else {
+                      false
+                  }
               }
           }
-          PKGEOF
-          fi
+          KOTLINEOF
+          
+          echo "Native module created at: $MODULES_DIR/PlanTimerModule.kt"
+          ls -la "$MODULES_DIR"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

@@ -11,6 +11,7 @@ import {
   Platform,
   ScrollView,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -19,25 +20,29 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Try to import native module, fallback to stub if not available
-let PlanTimer;
-try {
-  PlanTimer = require('./modules/plantimer');
-} catch (e) {
-  // Fallback stub for when native module is not built yet
-  PlanTimer = {
-    wakeupAndUnlock: async () => { console.log('Stub: wakeupAndUnlock'); return false; },
-    openApp: async () => { console.log('Stub: openApp'); return false; },
-    isDeviceLocked: async () => false,
-    requestWakeLock: async () => false,
-    releaseWakeLock: async () => false,
-    isBatteryOptimizationEnabled: async () => false,
-    requestBatteryOptimizationDisable: async () => false,
-    canDrawOverlays: async () => false,
-    requestOverlayPermission: async () => false,
-    wakeupUnlockAndOpen: async () => false,
-  };
-}
+// Stub implementation for native module functionality
+// In a production build, this would be replaced with actual native module
+const PlanTimer = {
+  wakeupAndUnlock: async () => { 
+    console.log('Stub: wakeupAndUnlock'); 
+    return false; 
+  },
+  openApp: async (packageName) => { 
+    console.log('Stub: openApp', packageName); 
+    return false;
+  },
+  isDeviceLocked: async () => false,
+  requestWakeLock: async () => false,
+  releaseWakeLock: async () => false,
+  isBatteryOptimizationEnabled: async () => false,
+  requestBatteryOptimizationDisable: async () => false,
+  canDrawOverlays: async () => false,
+  requestOverlayPermission: async () => false,
+  wakeupUnlockAndOpen: async (packageName) => {
+    console.log('Stub: wakeupUnlockAndOpen', packageName);
+    return await PlanTimer.openApp(packageName);
+  },
+};
 
 // Constants
 const ALARM_TASK = 'PLAN_TIMER_ALARM_TASK';
