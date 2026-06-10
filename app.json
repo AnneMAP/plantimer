@@ -1,33 +1,80 @@
 {
   "expo": {
-    "name": "DSP Core Surface",
-    "slug": "dsp-core-surface",
-    "owner": "annemap",
+    "name": "PlanTimer",
+    "slug": "plantimer-app",
     "version": "1.0.0",
-    "orientation": "landscape",
+    "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#1a1a2e",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
+      "backgroundColor": "#1a1a2e"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.plantimer.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch", "processing"],
+        "NSLocalNotificationUsageDescription": "Deze app heeft notificaties nodig voor timer alerts."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0a0a0a"
+        "backgroundColor": "#1a1a2e"
       },
-      "package": "nl.mapmedia.dspcoresurface",
+      "package": "com.plantimer.app",
+      "versionCode": 1,
       "permissions": [
-        "INTERNET",
-        "VIBRATE"
+        "android.permission.WAKE_LOCK",
+        "android.permission.DISABLE_KEYGUARD",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.ACTION_MANAGE_OVERLAY_PERMISSION",
+        "com.android.alarm.permission.SET_ALARM",
+        "android.permission.VIBRATE",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.MAIN",
+          "category": ["android.intent.category.LAUNCHER"]
+        }
       ]
     },
-    "plugins": [],
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ff6b6b",
+          "sounds": ["./assets/alarm.mp3"],
+          "mode": "production"
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow PlanTimer to access your Face ID biometric data."
+        }
+      ],
+      "expo-keep-awake",
+      "./modules/plantimer"
+    ],
     "extra": {
       "eas": {
-        "projectId": "3951a38e-4263-4077-acfc-581f75ce2cc2"
+        "projectId": "plantimer-app-project"
       }
-    }
+    },
+    "owner": "plantimer"
   }
 }

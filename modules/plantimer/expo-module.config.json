@@ -1,0 +1,7 @@
+{
+  "name": "plantimer",
+  "platforms": ["android"],
+  "android": {
+    "modules": ["com.plantimer.app.modules.PlanTimerModule"]
+  }
+}
