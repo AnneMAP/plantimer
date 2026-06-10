@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 DSP Core Surface - APK Builder (Portable)
 ==========================================
@@ -21,6 +22,7 @@ Gebruik:
 
 import argparse
 import json
+import io
 import os
 import re
 import shutil
@@ -29,6 +31,12 @@ import sys
 import urllib.request
 import zipfile
 from pathlib import Path
+
+# Forceer UTF-8 output op Windows (voorkomt cp1252 encoding errors)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ── Paden ────────────────────────────────────────────────────────────────────
 
@@ -54,10 +62,10 @@ def step(n: int, total: int, msg: str):
     print(f"\n[{n}/{total}] {msg}")
 
 def ok(msg: str):
-    print(f"      ✓  {msg}")
+    print(f"      OK  {msg}")
 
 def info(msg: str):
-    print(f"      →  {msg}")
+    print(f"      ->  {msg}")
 
 def err(msg: str):
     print(f"\n  FOUT: {msg}", file=sys.stderr)
@@ -100,12 +108,12 @@ def download_node(url: str, dest_zip: Path):
     def report(count, block_size, total):
         if total > 0:
             pct = min(100, int(count * block_size * 100 / total))
-            bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+            bar = "#" * (pct // 5) + "." * (20 - pct // 5)
             print(f"\r      [{bar}] {pct}%", end="", flush=True)
 
     urllib.request.urlretrieve(url, str(dest_zip), reporthook=report)
     print()  # newline na voortgangsbalk
-    ok(f"Download klaar → {dest_zip.name}")
+    ok(f"Download klaar -> {dest_zip.name}")
 
 # ── Stap 3: Uitpakken ─────────────────────────────────────────────────────────
 
@@ -218,6 +226,111 @@ def npx_run(paths: dict, args: list[str], cwd: Path | None = None) -> int:
 
 # ── Hoofdprogramma ────────────────────────────────────────────────────────────
 
+GIT_DIR = SCRIPT_DIR / "git"
+GIT_EXE = GIT_DIR / "bin" / "git.exe"
+GIT_PORTABLE_FILE = SCRIPT_DIR / "PortableGit.exe"
+
+
+def _get_git_portable_url() -> str:
+    """Haal de nieuwste Git for Windows portable download URL op via GitHub API."""
+    info("Nieuwste Git for Windows versie opzoeken...")
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/git-for-windows/git/releases/latest",
+            headers={"User-Agent": "dsp-core-surface-builder"}
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+        assets = data.get("assets", [])
+        for asset in assets:
+            name = asset.get("name", "")
+            if "PortableGit" in name and "64-bit" in name and name.endswith(".7z.exe"):
+                url = asset["browser_download_url"]
+                ok(f"Git versie gevonden: {data['tag_name']} -> {name}")
+                return url
+    except Exception as e:
+        info(f"GitHub API niet bereikbaar ({e}), gebruik fallback URL.")
+    # Fallback naar bekende stabiele versie
+    return "https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/PortableGit-2.45.2-64-bit.7z.exe"
+
+
+def _find_git() -> str | None:
+    """Zoek git.exe op: portable map, vaste locaties, PATH."""
+    # 1. Eigen portable map
+    if GIT_EXE.exists():
+        return str(GIT_EXE)
+    # 2. Vaste installatiepaden
+    candidates = [
+        r"C:\Program Files\Git\bin\git.exe",
+        r"C:\Program Files (x86)\Git\bin\git.exe",
+        r"C:\Git\bin\git.exe",
+    ]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    # 3. PATH
+    found = shutil.which("git")
+    return found if found else None
+
+
+def ensure_git() -> str:
+    """Zorg dat git beschikbaar is. Download portable versie indien nodig."""
+    found = _find_git()
+    if found:
+        ok(f"Git gevonden: {found}")
+        return found
+
+    info("Git niet gevonden - portable versie downloaden (~50 MB)...")
+    GIT_PORTABLE_URL = _get_git_portable_url()
+    info(f"URL: {GIT_PORTABLE_URL}")
+
+    def report(count, block_size, total):
+        if total > 0:
+            pct = min(100, int(count * block_size * 100 / total))
+            bar = "#" * (pct // 5) + "." * (20 - pct // 5)
+            print(f"\r      [{bar}] {pct}%", end="", flush=True)
+
+    urllib.request.urlretrieve(GIT_PORTABLE_URL, str(GIT_PORTABLE_FILE), reporthook=report)
+    print()
+
+    # PortableGit .exe is een self-extracting 7z archief
+    # Uitpakken met de stille vlag -o en -y
+    GIT_DIR.mkdir(exist_ok=True)
+    info("Uitpakken Git portable...")
+    rc = subprocess.run(
+        [str(GIT_PORTABLE_FILE), "-o", str(GIT_DIR), "-y"],
+        capture_output=True
+    ).returncode
+
+    GIT_PORTABLE_FILE.unlink(missing_ok=True)
+
+    if not GIT_EXE.exists():
+        raise RuntimeError(f"Git uitpakken mislukt (rc={rc}). Probeer handmatig: {GIT_PORTABLE_URL}")
+
+    ok(f"Git portable geinstalleerd: {GIT_EXE}")
+
+    # Voeg git/bin toe aan gebruikers-PATH
+    git_bin = str(GIT_DIR / "bin")
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
+                            winreg.KEY_READ | winreg.KEY_SET_VALUE) as key:
+            try:
+                current, _ = winreg.QueryValueEx(key, "PATH")
+            except FileNotFoundError:
+                current = ""
+            paths = [p for p in current.split(";") if p.strip()]
+            if git_bin not in paths:
+                paths.insert(0, git_bin)
+                winreg.SetValueEx(key, "PATH", 0, winreg.REG_EXPAND_SZ, ";".join(paths))
+                ok(f"Git/bin toegevoegd aan gebruikers-PATH")
+    except Exception as e:
+        info(f"PATH update overgeslagen: {e}")
+
+    os.environ["PATH"] = git_bin + os.pathsep + os.environ.get("PATH", "")
+    return str(GIT_EXE)
+
+
 def ensure_node() -> dict:
     """Zorg dat Node.js aanwezig is. Download indien nodig."""
     if NODE_EXE.exists() and NPM_CMD.exists():
@@ -271,7 +384,7 @@ def main():
         ok("node_modules al aanwezig, overgeslagen.")
         ok("(Verwijder node_modules map om opnieuw te installeren)")
     else:
-        info("Dit kan 2–5 minuten duren...")
+        info("Dit kan 2-5 minuten duren...")
         rc = npm_run(paths, ["install"], cwd=APP_DIR)
         if rc != 0:
             err("npm install mislukt.")
@@ -297,10 +410,10 @@ def main():
     # ── Stap 4: Expo inloggen ────────────────────────────────────────────────
     step(4, TOTAL, "Inloggen bij Expo...")
     print()
-    print("  ┌─────────────────────────────────────────────────────┐")
-    print("  │  Je hebt een GRATIS Expo account nodig.              │")
-    print("  │  Aanmaken: https://expo.dev/signup (in browser)      │")
-    print("  └─────────────────────────────────────────────────────┘")
+    print("  +-----------------------------------------------------+")
+    print("  |  Je hebt een GRATIS Expo account nodig.              |")
+    print("  |  Aanmaken: https://expo.dev/signup (in browser)      |")
+    print("  +-----------------------------------------------------+")
     print()
     rc = npx_run(paths, ["eas-cli", "login"], cwd=APP_DIR)
     if rc != 0:
@@ -319,23 +432,26 @@ def main():
         subprocess.run([sys.executable, str(make_assets)], capture_output=True)
         ok("Assets gecontroleerd.")
 
-    # Git safe.directory instellen (vereist op gedeelde/netwerk schijven)
-    subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(APP_DIR)], capture_output=True)
+    # Git installeren indien nodig (vereist voor EAS build)
+    try:
+        git_exe = ensure_git()
+    except RuntimeError as e:
+        err(str(e))
+        sys.exit(1)
 
-    # Zorg dat git repo + commit aanwezig is (EAS vereist dit)
+    # Git configureren en repo voorbereiden
+    subprocess.run([git_exe, "config", "--global", "--add", "safe.directory", str(APP_DIR)], capture_output=True)
     git_dir = APP_DIR / ".git"
     if not git_dir.exists():
-        info("Git repo initialiseren (vereist voor EAS)...")
-        subprocess.run(["git", "init"], cwd=str(APP_DIR), capture_output=True)
-        subprocess.run(["git", "config", "user.email", "build@local"], cwd=str(APP_DIR), capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Build"], cwd=str(APP_DIR), capture_output=True)
-
-    # Commit eventuele wijzigingen
+        info("Git repo initialiseren...")
+        subprocess.run([git_exe, "init"], cwd=str(APP_DIR), capture_output=True)
+        subprocess.run([git_exe, "config", "user.email", "build@local"], cwd=str(APP_DIR), capture_output=True)
+        subprocess.run([git_exe, "config", "user.name", "Build"], cwd=str(APP_DIR), capture_output=True)
     gi = APP_DIR / ".gitignore"
     if not gi.exists():
         gi.write_text("node_modules/\nbuild_portable/node/\n*.zip\n.expo/\ndist/\n")
-    subprocess.run(["git", "add", "."], cwd=str(APP_DIR), capture_output=True)
-    subprocess.run(["git", "commit", "-m", "build"], cwd=str(APP_DIR), capture_output=True)
+    subprocess.run([git_exe, "add", "."], cwd=str(APP_DIR), capture_output=True)
+    subprocess.run([git_exe, "commit", "-m", "build"], cwd=str(APP_DIR), capture_output=True)
     ok("Git repo gereed.")
 
     rc = npx_run(paths, [
@@ -352,7 +468,7 @@ def main():
     print("  Download de APK via de link die hierboven verscheen.")
     print()
     print("  Installeren op Android:")
-    print("    1. Instellingen → Beveiliging → Onbekende bronnen: AAN")
+    print("    1. Instellingen -> Beveiliging -> Onbekende bronnen: AAN")
     print("    2. Open de gedownloade .apk op je apparaat")
     print()
 

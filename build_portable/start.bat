@@ -8,12 +8,13 @@ set "PY="
 :: 1. Python naast dit script (meest portable)
 if exist "%~dp0python\python.exe"   set "PY=%~dp0python\python.exe"
 
-:: 2. Embedded Python in radio-project
-if not defined PY if exist "K:\RADIO\python311-embed\python.exe"  set "PY=K:\RADIO\python311-embed\python.exe"
+:: 2. Embedded Python in radio-project (beide PC's)
 if not defined PY if exist "I:\RADIO\python311-embed\python.exe"  set "PY=I:\RADIO\python311-embed\python.exe"
+if not defined PY if exist "K:\RADIO\python311-embed\python.exe"  set "PY=K:\RADIO\python311-embed\python.exe"
 
 :: 3. DSP Core venv
 if not defined PY if exist "%~dp0..\.venv\Scripts\python.exe"   set "PY=%~dp0..\.venv\Scripts\python.exe"
+if not defined PY if exist "I:\RADIO\dsp-core-server\.venv\Scripts\python.exe" set "PY=I:\RADIO\dsp-core-server\.venv\Scripts\python.exe"
 
 :: 4. Python in PATH
 if not defined PY (
