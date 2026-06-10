@@ -1,0 +1,15 @@
+import struct
+import zlib
+
+def chunk(tag, data):
+    crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+sig = b"\x89PNG\r\n\x1a\n"
+ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 96, 96, 8, 2, 0, 0, 0))
+row = b"\x00" + bytes((233, 69, 96)) * 96
+idat = chunk(b"IDAT", zlib.compress(row * 96, 9))
+iend = chunk(b"IEND", b"")
+
+with open("assets/notification-icon.png", "wb") as f:
+    f.write(sig + ihdr + idat + iend)
