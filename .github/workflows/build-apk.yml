@@ -93,15 +93,47 @@ jobs:
       - name: Copy native module to Android project
         run: |
           echo "Setting up native PlanTimer module..."
-          # Create the module directory in Android project
-          mkdir -p android/app/src/main/java/com/plantimer/app/modules
+          
+          # Find the package name from the android directory
+          PACKAGE_DIR=$(find android/app/src/main/java -type d -name "plantimer" 2>/dev/null | head -1 || echo "")
+          if [ -z "$PACKAGE_DIR" ]; then
+            # Create package structure
+            mkdir -p android/app/src/main/java/com/plantimer/app/modules
+            TARGET_DIR="android/app/src/main/java/com/plantimer/app/modules"
+          else
+            TARGET_DIR="$PACKAGE_DIR/modules"
+            mkdir -p "$TARGET_DIR"
+          fi
           
           # Copy the Kotlin module file
           cp modules/plantimer/android/src/main/java/com/plantimer/app/modules/PlanTimerModule.kt \
-             android/app/src/main/java/com/plantimer/app/modules/
+             "$TARGET_DIR/"
           
-          echo "Native module files copied!"
-          ls -la android/app/src/main/java/com/plantimer/app/modules/
+          echo "Native module copied to: $TARGET_DIR"
+          ls -la "$TARGET_DIR"
+          
+          # Get the actual package path
+          PKG_PATH=$(find android/app/src/main/java -name "MainApplication.kt" -exec dirname {} \; | head -1)
+          PKG_NAME=$(echo "$PKG_PATH" | sed 's|android/app/src/main/java/||' | tr '/' '.')
+          echo "Package name: $PKG_NAME"
+          
+          # Create a PackageList.java in the correct location if it doesn't exist
+          if [ ! -f "$PKG_PATH/PlanTimerPackage.kt" ]; then
+            cat > "$PKG_PATH/PlanTimerPackage.kt" << 'PKGEOF'
+          package com.plantimer.app
+          
+          import android.content.Context
+          import com.plantimer.app.modules.PlanTimerModule
+          import expo.modules.core.interfaces.Package
+          import expo.modules.core.interfaces.ReactActivityLifecycleListener
+          
+          class PlanTimerPackage : Package {
+              override fun createNativeModules(reactContext: Context): List<NativeModule> {
+                  return listOf(PlanTimerModule())
+              }
+          }
+          PKGEOF
+          fi
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

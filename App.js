@@ -18,7 +18,26 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as PlanTimer from './modules/plantimer';
+
+// Try to import native module, fallback to stub if not available
+let PlanTimer;
+try {
+  PlanTimer = require('./modules/plantimer');
+} catch (e) {
+  // Fallback stub for when native module is not built yet
+  PlanTimer = {
+    wakeupAndUnlock: async () => { console.log('Stub: wakeupAndUnlock'); return false; },
+    openApp: async () => { console.log('Stub: openApp'); return false; },
+    isDeviceLocked: async () => false,
+    requestWakeLock: async () => false,
+    releaseWakeLock: async () => false,
+    isBatteryOptimizationEnabled: async () => false,
+    requestBatteryOptimizationDisable: async () => false,
+    canDrawOverlays: async () => false,
+    requestOverlayPermission: async () => false,
+    wakeupUnlockAndOpen: async () => false,
+  };
+}
 
 // Constants
 const ALARM_TASK = 'PLAN_TIMER_ALARM_TASK';

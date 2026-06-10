@@ -67,8 +67,7 @@
           "faceIDPermission": "Allow PlanTimer to access your Face ID biometric data."
         }
       ],
-      "expo-keep-awake",
-      "./modules/plantimer"
+      "expo-keep-awake"
     ],
     "extra": {
       "eas": {
