@@ -56,18 +56,9 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ff6b6b",
-          "sounds": ["./assets/alarm.mp3"],
-          "mode": "production"
+          "color": "#ff6b6b"
         }
-      ],
-      [
-        "expo-secure-store",
-        {
-          "faceIDPermission": "Allow PlanTimer to access your Face ID biometric data."
-        }
-      ],
-      "expo-keep-awake"
+      ]
     ],
     "extra": {
       "eas": {
