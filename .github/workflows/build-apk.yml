@@ -94,15 +94,7 @@ jobs:
           EOF
 
       - name: Generate Android project with Expo prebuild
-        run: |
-          # Remove the modules directory temporarily to avoid TypeScript issues during prebuild
-          mv modules modules_backup 2>/dev/null || true
-          
-          # Run prebuild
-          npx expo prebuild --platform android --clean --no-install || npx expo prebuild --platform android --clean
-          
-          # Restore modules
-          mv modules_backup modules 2>/dev/null || true
+        run: npx expo prebuild --platform android --clean
 
       - name: Setup native Android module
         run: |

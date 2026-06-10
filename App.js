@@ -11,7 +11,6 @@ import {
   Platform,
   ScrollView,
   KeyboardAvoidingView,
-  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -19,17 +18,24 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import { StatusBar } from 'expo-status-bar';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Linking } from 'react-native';
 
-// Stub implementation for native module functionality
-// In a production build, this would be replaced with actual native module
+// Stub implementation - native module will be injected during CI build
 const PlanTimer = {
-  wakeupAndUnlock: async () => { 
-    console.log('Stub: wakeupAndUnlock'); 
-    return false; 
-  },
+  wakeupAndUnlock: async () => { console.log('Stub: wakeupAndUnlock'); return true; },
   openApp: async (packageName) => { 
     console.log('Stub: openApp', packageName); 
-    return false;
+    // Fallback to React Native Linking
+    try {
+      const canOpen = await Linking.canOpenURL(`package:${packageName}`);
+      if (canOpen) {
+        await Linking.openURL(`package:${packageName}`);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
   },
   isDeviceLocked: async () => false,
   requestWakeLock: async () => false,
@@ -40,7 +46,7 @@ const PlanTimer = {
   requestOverlayPermission: async () => false,
   wakeupUnlockAndOpen: async (packageName) => {
     console.log('Stub: wakeupUnlockAndOpen', packageName);
-    return await PlanTimer.openApp(packageName);
+    return PlanTimer.openApp(packageName);
   },
 };
 
