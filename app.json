@@ -20,8 +20,6 @@
       "package": "nl.mapmedia.dspcoresurface",
       "permissions": ["INTERNET", "VIBRATE"]
     },
-    "plugins": [
-      "react-native-reanimated"
-    ]
+    "plugins": []
   }
 }
