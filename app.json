@@ -18,8 +18,16 @@
         "backgroundColor": "#0a0a0a"
       },
       "package": "nl.mapmedia.dspcoresurface",
-      "permissions": ["INTERNET", "VIBRATE"]
+      "permissions": [
+        "INTERNET",
+        "VIBRATE"
+      ]
     },
-    "plugins": []
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "3951a38e-4263-4077-acfc-581f75ce2cc2"
+      }
+    }
   }
 }

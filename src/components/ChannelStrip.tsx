@@ -14,6 +14,8 @@ import MotorFader from './MotorFader';
 import RotaryEncoder from './RotaryEncoder';
 import { Colors } from '../theme/colors';
 
+const LONG_PRESS_MS = 800;
+
 interface Props {
   channel: ChannelState;
   compact?: boolean;
@@ -25,6 +27,8 @@ export default function ChannelStrip({ channel, compact = false }: Props) {
     sendPflPress,
     sendTalkbackOn,
     sendTalkbackOff,
+    sendCoughOn,
+    sendCoughOff,
     sendFader,
     handleMenuPress,
     handleMenuRotate,
@@ -34,11 +38,58 @@ export default function ChannelStrip({ channel, compact = false }: Props) {
   } = useSurface();
 
   const chId = channel.channelId;
-  const talkbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onFaderChange = useCallback((v: number) => {
-    sendFader(chId, v);
-  }, [chId, sendFader]);
+  // PFL button: short press = PFL toggle, long press = hold talkback
+  const pflTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pflLongFired = useRef(false);
+
+  const onPflPressIn = useCallback(() => {
+    pflLongFired.current = false;
+    pflTimer.current = setTimeout(() => {
+      pflLongFired.current = true;
+      sendTalkbackOn(chId);
+      Vibration.vibrate(40);
+    }, LONG_PRESS_MS);
+  }, [chId, sendTalkbackOn]);
+
+  const onPflPressOut = useCallback(() => {
+    if (pflTimer.current) { clearTimeout(pflTimer.current); pflTimer.current = null; }
+    if (pflLongFired.current) {
+      sendTalkbackOff(chId);
+      pflLongFired.current = false;
+    } else {
+      sendPflPress(chId);
+      Vibration.vibrate(20);
+    }
+  }, [chId, sendPflPress, sendTalkbackOff]);
+
+  // Encoder press: short press = menu, long press = hold cough
+  const encTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const encLongFired = useRef(false);
+
+  const onEncoderPressIn = useCallback(() => {
+    encLongFired.current = false;
+    encTimer.current = setTimeout(() => {
+      encLongFired.current = true;
+      sendCoughOn(chId);
+      Vibration.vibrate(40);
+    }, LONG_PRESS_MS);
+  }, [chId, sendCoughOn]);
+
+  const onEncoderPressOut = useCallback((wasDrag: boolean) => {
+    if (encTimer.current) { clearTimeout(encTimer.current); encTimer.current = null; }
+    if (wasDrag) {
+      encLongFired.current = false;
+      return;
+    }
+    if (encLongFired.current) {
+      sendCoughOff(chId);
+      encLongFired.current = false;
+    } else {
+      handleMenuPress(chId);
+      Vibration.vibrate(20);
+    }
+  }, [chId, handleMenuPress, sendCoughOff]);
 
   const onTalkbackPressIn = useCallback(() => {
     sendTalkbackOn(chId);
@@ -53,20 +104,14 @@ export default function ChannelStrip({ channel, compact = false }: Props) {
     handleMenuRotate(chId, delta);
   }, [chId, handleMenuRotate]);
 
-  const onEncoderPress = useCallback(() => {
-    handleMenuPress(chId);
-    Vibration.vibrate(20);
-  }, [chId, handleMenuPress]);
+  const onFaderChange = useCallback((v: number) => {
+    sendFader(chId, v);
+  }, [chId, sendFader]);
 
   const onOnPress = useCallback(() => {
     sendOnPress(chId);
     Vibration.vibrate(20);
   }, [chId, sendOnPress]);
-
-  const onPflPress = useCallback(() => {
-    sendPflPress(chId);
-    Vibration.vibrate(20);
-  }, [chId, sendPflPress]);
 
   const inMenu = channel.menuState !== 'HOME';
 
@@ -89,7 +134,8 @@ export default function ChannelStrip({ channel, compact = false }: Props) {
       <View style={styles.encoderRow}>
         <RotaryEncoder
           onRotate={onEncoderRotate}
-          onPress={onEncoderPress}
+          onPressIn={onEncoderPressIn}
+          onPressOut={onEncoderPressOut}
           label={inMenu ? '▶ Menu' : 'MENU'}
           size={44}
         />
@@ -111,11 +157,14 @@ export default function ChannelStrip({ channel, compact = false }: Props) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.btn, styles.btnPfl, channel.pfl && styles.btnPflActive]}
-          onPress={onPflPress}
+          style={[styles.btn, styles.btnPfl, (channel.pfl || channel.talkback) && styles.btnPflActive]}
+          onPressIn={onPflPressIn}
+          onPressOut={onPflPressOut}
           activeOpacity={0.7}
         >
-          <Text style={[styles.btnLabel, channel.pfl && styles.btnLabelActive]}>PFL</Text>
+          <Text style={[styles.btnLabel, (channel.pfl || channel.talkback) && styles.btnLabelActive]}>
+            {channel.talkback ? 'TB' : 'PFL'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -154,6 +203,8 @@ function ChannelStripCompact({ channel }: { channel: ChannelState }) {
     sendPflPress,
     sendTalkbackOn,
     sendTalkbackOff,
+    sendCoughOn,
+    sendCoughOff,
     sendFader,
     handleMenuPress,
     handleMenuRotate,
@@ -163,6 +214,41 @@ function ChannelStripCompact({ channel }: { channel: ChannelState }) {
   } = useSurface();
 
   const chId = channel.channelId;
+
+  // PFL long-press = talkback
+  const pflTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pflLongFired = useRef(false);
+  const onPflIn = () => {
+    pflLongFired.current = false;
+    pflTimer.current = setTimeout(() => {
+      pflLongFired.current = true;
+      sendTalkbackOn(chId);
+      Vibration.vibrate(40);
+    }, LONG_PRESS_MS);
+  };
+  const onPflOut = () => {
+    if (pflTimer.current) { clearTimeout(pflTimer.current); pflTimer.current = null; }
+    if (pflLongFired.current) { sendTalkbackOff(chId); pflLongFired.current = false; }
+    else { sendPflPress(chId); Vibration.vibrate(20); }
+  };
+
+  // Encoder long-press = cough
+  const encTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const encLongFired = useRef(false);
+  const onEncIn = () => {
+    encLongFired.current = false;
+    encTimer.current = setTimeout(() => {
+      encLongFired.current = true;
+      sendCoughOn(chId);
+      Vibration.vibrate(40);
+    }, LONG_PRESS_MS);
+  };
+  const onEncOut = (wasDrag: boolean) => {
+    if (encTimer.current) { clearTimeout(encTimer.current); encTimer.current = null; }
+    if (wasDrag) { encLongFired.current = false; return; }
+    if (encLongFired.current) { sendCoughOff(chId); encLongFired.current = false; }
+    else { handleMenuPress(chId); Vibration.vibrate(20); }
+  };
 
   return (
     <View style={styles.stripCompact}>
@@ -176,23 +262,25 @@ function ChannelStripCompact({ channel }: { channel: ChannelState }) {
 
       <RotaryEncoder
         onRotate={(d) => handleMenuRotate(chId, d)}
-        onPress={() => handleMenuPress(chId)}
+        onPressIn={onEncIn}
+        onPressOut={onEncOut}
         size={36}
       />
 
       <View style={styles.compactBtns}>
         <TouchableOpacity
-          style={[styles.btnCompact, channel.onAir  && styles.btnOnActive]}
+          style={[styles.btnCompact, channel.onAir && styles.btnOnActive]}
           onPress={() => sendOnPress(chId)}
         >
           <Text style={styles.btnCompactText}>{channel.onAir ? 'ON' : 'off'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.btnCompact, channel.pfl && styles.btnPflActive]}
-          onPress={() => sendPflPress(chId)}
+          style={[styles.btnCompact, (channel.pfl || channel.talkback) && styles.btnPflActive]}
+          onPressIn={onPflIn}
+          onPressOut={onPflOut}
         >
-          <Text style={styles.btnCompactText}>PFL</Text>
+          <Text style={styles.btnCompactText}>{channel.talkback ? 'TB' : 'PFL'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -182,6 +182,8 @@ interface SurfaceCtx {
   sendPflPress: (chId: string) => void;
   sendTalkbackOn: (chId: string) => void;
   sendTalkbackOff: (chId: string) => void;
+  sendCoughOn: (chId: string) => void;
+  sendCoughOff: (chId: string) => void;
   sendFader: (chId: string, value: number) => void;
   sendSetSource: (chId: string, source: string) => void;
   sendBusToggle: (chId: string, bus: string) => void;
@@ -316,6 +318,12 @@ export function SurfaceProvider({ children }: { children?: ReactNode }) {
 
   const sendTalkbackOff = useCallback((chId: string) =>
     send({ event: 'talkback_off', channel: chId }), [send]);
+
+  const sendCoughOn = useCallback((chId: string) =>
+    send({ event: 'cough_on', channel: chId }), [send]);
+
+  const sendCoughOff = useCallback((chId: string) =>
+    send({ event: 'cough_off', channel: chId }), [send]);
 
   const sendFader = useCallback((chId: string, value: number) =>
     send({ event: 'fader', channel: chId, value }), [send]);
@@ -470,6 +478,8 @@ export function SurfaceProvider({ children }: { children?: ReactNode }) {
     sendPflPress,
     sendTalkbackOn,
     sendTalkbackOff,
+    sendCoughOn,
+    sendCoughOff,
     sendFader,
     sendSetSource,
     sendBusToggle,

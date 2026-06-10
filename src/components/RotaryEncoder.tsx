@@ -12,14 +12,24 @@ import { Colors } from '../theme/colors';
 
 interface Props {
   onRotate: (delta: number) => void;
-  onPress: () => void;
+  onPress?: () => void;
+  onPressIn?: () => void;
+  /** called on release; wasDrag=true when a rotation occurred (no press action) */
+  onPressOut?: (wasDrag: boolean) => void;
   label?: string;
   size?: number;
 }
 
 const ROTATION_THRESHOLD = 8;  // px per step
 
-export default function RotaryEncoder({ onRotate, onPress, label = '', size = 52 }: Props) {
+export default function RotaryEncoder({
+  onRotate,
+  onPress,
+  onPressIn,
+  onPressOut,
+  label = '',
+  size = 52,
+}: Props) {
   const lastY = useRef(0);
   const accumulated = useRef(0);
   const isDragging = useRef(false);
@@ -32,6 +42,7 @@ export default function RotaryEncoder({ onRotate, onPress, label = '', size = 52
         lastY.current = gs.y0;
         accumulated.current = 0;
         isDragging.current = false;
+        onPressIn?.();
       },
       onPanResponderMove: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
         const dy = lastY.current - gs.moveY;
@@ -41,7 +52,11 @@ export default function RotaryEncoder({ onRotate, onPress, label = '', size = 52
         if (Math.abs(accumulated.current) >= ROTATION_THRESHOLD) {
           const steps = Math.round(accumulated.current / ROTATION_THRESHOLD);
           if (steps !== 0) {
-            isDragging.current = true;
+            if (!isDragging.current) {
+              // First drag step: cancel the long-press timer in parent
+              isDragging.current = true;
+              onPressOut?.(true);   // drag-cancel: parent clears timer
+            }
             onRotate(steps);
             accumulated.current -= steps * ROTATION_THRESHOLD;
           }
@@ -49,7 +64,9 @@ export default function RotaryEncoder({ onRotate, onPress, label = '', size = 52
       },
       onPanResponderRelease: () => {
         if (!isDragging.current) {
-          onPress();
+          // Short tap with no drag
+          if (onPressOut) onPressOut(false);
+          else onPress?.();
         }
         isDragging.current = false;
       },

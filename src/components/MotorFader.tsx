@@ -1,11 +1,5 @@
-import React, { useRef, useCallback } from 'react';
-import {
-  View,
-  StyleSheet,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
-} from 'react-native';
+import React, { useRef } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Colors } from '../theme/colors';
 
 interface Props {
@@ -28,45 +22,53 @@ export default function MotorFader({
   disabled = false,
 }: Props) {
   const trackH = height - KNOB_H;
-  const knobY = (1 - value) * trackH;
-  const startY = useRef(0);
+  const knobY  = (1 - value) * trackH;
+
+  // Track the single touch that owns this fader
+  const touchId  = useRef<string | null>(null);
+  const startY   = useRef(0);
   const startVal = useRef(value);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder:  () => !disabled,
-      onPanResponderGrant: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
-        startY.current   = gs.y0;
+  const faderColor = value > 0.85
+    ? Colors.faderHigh
+    : value > 0.65
+      ? Colors.faderMid
+      : Colors.faderFill;
+
+  return (
+    <View
+      style={[styles.container, { height, width }]}
+      // Use native touch handlers — each fader owns one identifier so
+      // multiple faders can be dragged simultaneously (true multitouch).
+      onStartShouldSetResponder={() => !disabled}
+      onMoveShouldSetResponder={() => !disabled}
+      onResponderGrant={(e) => {
+        const t = String(e.nativeEvent.identifier);
+        touchId.current  = t;
+        startY.current   = e.nativeEvent.pageY;
         startVal.current = value;
-      },
-      onPanResponderMove: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
-        const dy     = gs.moveY - startY.current;
+      }}
+      onResponderMove={(e) => {
+        if (String(e.nativeEvent.identifier) !== touchId.current) return;
+        const dy     = e.nativeEvent.pageY - startY.current;
         const delta  = -dy / trackH;
         const newVal = Math.max(0, Math.min(1, startVal.current + delta));
         onChange(newVal);
-      },
-      onPanResponderRelease: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
-        const dy     = gs.moveY - startY.current;
+      }}
+      onResponderRelease={(e) => {
+        if (String(e.nativeEvent.identifier) !== touchId.current) return;
+        touchId.current = null;
+        const dy     = e.nativeEvent.pageY - startY.current;
         const delta  = -dy / trackH;
         const newVal = Math.max(0, Math.min(1, startVal.current + delta));
         onChangeEnd?.(newVal);
-      },
-    }),
-  ).current;
-
-  const faderColor = value > 0.85 ? Colors.faderHigh : value > 0.65 ? Colors.faderMid : Colors.faderFill;
-
-  return (
-    <View style={[styles.container, { height, width }]} {...panResponder.panHandlers}>
+      }}
+      onResponderTerminate={() => { touchId.current = null; }}
+    >
       {/* Track */}
       <View style={styles.track}>
-        {/* Fill bar from bottom to knob */}
         <View
-          style={[
-            styles.fill,
-            { height: trackH - knobY, backgroundColor: faderColor },
-          ]}
+          style={[styles.fill, { height: trackH - knobY, backgroundColor: faderColor }]}
         />
       </View>
       {/* Knob */}
